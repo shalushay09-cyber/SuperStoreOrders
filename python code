@@ -1,0 +1,622 @@
+import pandas as pd
+import numpy as np
+from decimal import Decimal
+path = r'ur path'
+store=pd.read_csv(path)
+store['sales']=store['sales'].astype(str).str.replace(',', '.', regex = False)
+store['sales']=pd.to_numeric(store['sales'], errors='coerce')
+store['order_date']=pd.to_datetime(store['order_date'], dayfirst=True)
+store['ship_date']=pd.to_datetime(store['ship_date'], dayfirst = True)
+#I. Базовые Статистики и Общие Сведения
+#1 Каково общее количество заказов в датасете?
+len(store)
+#2 Сколько уникальных клиентов совершили покупки?
+store['customer_name'].nunique()
+#3 Уникальные клиенты
+store['customer_name'].unique()
+#4 В скольких уникальных странах представлены заказы?
+store["country"].nunique()
+# 5 Каковы общие показатели продаж (Sales), прибыли (Profit) и количества (Quantity)?
+avg=store[['sales', 'profit', 'quantity']].mean().round()#разное среднее значение по продажам в питон и скл
+#len(store)
+#store['sales'].max()
+#store['sales'].sum()
+###store['sales'].sort_values(ascending=False).head(20)
+#problem=store['sales'].isna()
+##store['sales'].isna().sum()
+#nan=store[store['sales'].isna()].index
+#store.loc[nan, 'sales']
+#bad = store['sales'][pd.to_numeric(store['sales'], errors='coerce').isna()]
+#print(bad.value_counts(dropna=False).head(20)) короче ошибка была в том что стоит запятая вместо точки и питон не распознает это
+avg=avg.rename({'sales' : 'Среднее продаж',
+'profit' : 'Средний профит', 'quantity' : 'Среднее количество'})
+print(avg)
+#6 Какой процент от общей прибыли приходится на топ-10% заказов?
+databae=int(store['product_name'].nunique()*10/100) #10 процентов от всех товаров которые есть
+grouped=store.groupby('product_name')[['profit']].sum().sort_values(by = 'profit', ascending = False).head(databae).reset_index()
+sum_grouped=grouped['profit'].sum()
+sum_grouped*100/store['profit'].sum()
+#7 Распределение по приоритетам
+priority=store.groupby('order_priority').size().sort_values(ascending = False).reset_index(name='size')
+priority['percentage']=(priority['size']*100/len(store)).astype(int)
+print(priority)
+
+#8 Самый прибыльный год
+store.groupby('year')['profit'].sum().reset_index(name='profit_of_year').sort_values(by = 'profit_of_year', ascending=False).round(0)
+#9 Уникальные категории и подкатегории товаров
+cat=store['category'].nunique()
+subcat=store['sub_category'].nunique()
+print(f'Количество категорий = {cat} \nКоличество подкатегорий = {subcat}')
+#10 Соотношение заказов с разными способами доставки
+percentage_of_shipping=store.groupby('ship_mode').size().reset_index(name='size').sort_values(by='size', ascending=False)
+percentage_of_shipping['percentage']=(percentage_of_shipping['size']*100/len(store)).round(0)
+print(percentage_of_shipping)
+#II. Продажи и Прибыль
+#11 Какая категория товаров приносит наибольшую прибыль 
+store.groupby('category')['profit'].sum().reset_index(name='profit').sort_values(by='profit', ascending=False)
+##total=store['profit'].apply(lambda x: Decimal(str(x)))
+#total.sum().quantize(Decimal('0.01'))
+#store['profit'].sum()
+#total = store['profit'].apply(lambda x: Decimal(str(x))).sum()
+#print(total)
+#a=store['profit'].max()
+##b=store['profit'].min()
+#print (a, b)
+#store.nlargest(10, 'profit')[['profit']]
+#12 Какая подкатегория приносит наибольший доход
+store.groupby('sub_category')['sales'].sum().reset_index(name='Выручка').sort_values(by = 'Выручка', ascending = False).head(1)
+#13 Топ 10 товаров, которые лучшие по количеству
+store.groupby('product_name')['quantity'].sum().reset_index(name='quantity').sort_values(by = 'quantity', ascending = False).round().head(10)
+#14 Топ 10 товаров, которые приносят наибольшую прибыль
+store.groupby('product_name')['profit'].sum().reset_index(name = 'profit').sort_values(by='profit', ascending = False).head(10).round()
+#15 Товары, приносящие наибольший убыток 
+prof=store.groupby('product_name')['profit'].sum().reset_index(name = 'profit').sort_values(by='profit', ascending = True).head(10).round()
+prof[prof['profit'] < 0]
+#16 Средняя прибыль на один заказ в каждой категории
+store.groupby('category')['profit'].mean().reset_index(name='average').round(2).sort_values(by='average', ascending=False)
+#17 Маржинальность для каждой подкатегории
+profit_sum=store.groupby('sub_category')['profit'].sum()
+sales_sum=store.groupby('sub_category')['sales'].sum()
+margin=(profit_sum/sales_sum).reset_index(name='margin').sort_values(by = 'margin', ascending = False).round(2)
+print(margin)
+#18 Как меняется средняя прибыль в зависимости от приолритета заказа
+store.groupby('order_priority')['profit'].mean().reset_index(name='average').sort_values(by='average', ascending = False).round()
+#19 Как способ доставки влияет на прибыльность заказа
+store.groupby('ship_mode')['profit'].mean().reset_index(name='average').sort_values(by='average', ascending = False).round()
+#20 Есть ли корреляция между скидкой (дискаунт) и общей прибылью
+store['Classification']=np.where(store['discount'] > 1, 'Есть скидка', np.where(store['discount']==0, 'Нет скидки', 'Брак'))
+store.groupby('Classification').agg(summa = ('profit', 'sum'), siz= ('discount', 'size')).reset_index().sort_values(by='summa', ascending = False).round()
+#21 При какой скидке идет большой убыток
+c1=[store['discount'] == 0, store['discount'] <= 0.1, store['discount'] <= 0.2, store['discount'] <= 0.3, store['discount'] <= 0.4, store['discount'] <= 0.5, store['discount'] <= 0.6,
+store['discount'] <= 0.7, store['discount'] <= 0.8, store['discount'] <= 0.9, store['discount'] <= 1]
+c2=['Скидки нема', 'Скидка до 10 %', 'Скидка 11-20%', 'Скидка 21-30%', 'Скидка 31-40%', 'Скидка 41-50%', 'Скидка 51-60%', 'Скидка 61-70%',
+'Скидка 71-80%', 'Скидка 81-90%', 'Скидка 91-100%']
+store['classif']=np.select(c1, c2, default = 'Скидка более 100 %')
+new=store.groupby('classif').agg(average = ('profit', 'mean'), siz=('discount', 'size')).reset_index().sort_values(by='average', ascending = False)
+new['average']=new['average'].round()
+new
+#new['siz'].sum()
+#store['discount'].isna().sum()
+store['classif']=np.where(store['discount'] == 0, 'Скидки нема', np.where(store['discount'] <= 0.1, 'Скидка до 10%', np.where (store['discount'] <=0.2, 'Скидка до 11-20%',
+np.where (store['discount'] <=0.3, 'Скидка 21-30%', np.where(store['discount'] <= 0.4, 'Скидка 31-40%', np.where(store['discount'] <=0.5, 'Скидка 41-50 %',
+np.where(store['discount'] <=0.6, 'Скидка 51-60%', np.where(store['discount'] <=0.7, 'Скидка 61-70%', np.where (store['discount'] <=0.8, 'Скидка 71-80%',
+np.where(store['discount'] <=0.9, 'Скидка 81-90%', np.where(store['discount'] <=1, 'Скидка 91-100%', 'Скидка более 100 процентов')))))))))))
+niw=store.groupby('classif').agg(average= ('profit', 'mean'), siz=('discount', 'size')).reset_index().sort_values(by='average', ascending = False)
+niw['average']=niw['average'].round()
+niw
+
+#22 Общие продажи и прибыль по месяцам/кварталам
+store['month_name']=store['order_date'].dt.strftime('%B')
+tabl=store.groupby('month_name').agg(virucka = ('sales', 'sum'), profit = ('profit', 'sum')).sort_values(by='virucka', ascending = False)
+tabl['profit_from_viruchka']= (tabl['profit'] * 100) / (tabl['virucka'])
+tabl
+#tabl['profit']
+
+store['quarter_time']=store['order_date'].dt.quarter
+tabl=store.groupby('quarter_time').agg(vruchka = ('sales', 'sum'), profit  = ('profit', 'sum')).sort_values(by = 'vruchka', ascending = False)
+tabl['prof_from_vir']=(tabl['profit'] * 100) / tabl['vruchka']
+tabl
+#23 Самый прибыльный месяц
+store['month']=store['order_date'].dt.strftime('%B')
+store.groupby('month')['profit'].sum().sort_values(ascending=False).head(1)
+
+#24 Сезонность в продажах определенных категорий
+store['month']=store['order_date'].dt.month_name()
+tabel=store.groupby(['sub_category', 'month'])['quantity'].sum().reset_index(name='quantity').sort_values(by=['sub_category', 'quantity'], ascending = [True, False])
+tabel['rnk']=tabel.groupby('sub_category')['quantity'].rank(method = 'min', ascending = False).astype(int)
+tabel['prcnt']=(tabel['quantity']*100/tabel.groupby('sub_category')['quantity'].transform(sum)).round(2)
+tabel
+#25 Какой сегмент рынка приносит наибольшую прибыль
+store.groupby('segment')['profit'].sum().reset_index(name='profit').nlargest(1, 'profit').round()
+#26 Какой сегмент рынка приносит наибольшую прибыль
+store.groupby('region')[['sales']].sum().reset_index().nlargest(1, 'sales')
+#27 В каком регионе самая высокая средняя прибыль на заказ
+store.groupby('region')['profit'].mean().reset_index().nlargest(1, 'profit').round(2)
+#28 Какая страна является самым крупным рынком по объему продаж
+table=store.groupby('country')[['sales']].sum().reset_index().round()
+table['prcnt']=table['sales']*100/table['sales'].sum()
+table.sort_values(by = 'sales', ascending = False).round(2)
+
+#29 Какие 5 стран приносят набиольшую прибыль
+store.groupby('country')[['profit']].sum().reset_index().nlargest(5, 'profit').round()
+#30 Динамика продаж по годам
+store['year']=store['order_date'].dt.year
+table=store.groupby('year')[['sales']].sum().reset_index().sort_values(by='sales', ascending = False).round(0)
+table
+#III. Клиентская аналитика
+#31 Самый крупный клиент по общей сумме заказов
+store.groupby('customer_name')[['sales']].sum().reset_index().nlargest(1, 'sales').round(0)
+#32 Самый прибыльный клиент
+store.groupby('customer_name')[['profit']].sum().reset_index().nlargest(1, 'profit').round(0)
+#33 Кто из клиентов совершил больше всего заказов
+store.groupby('customer_name', as_index=False)[['quantity']].sum().nlargest(1, 'quantity').round(0)
+#34 Клиенты котоыре приносят больший убыток
+table=store[store['profit'] < 0]
+bale=table.groupby('customer_name', as_index = False)[['profit']].sum().nsmallest(10, 'profit').round()
+bale
+#35 Средняя сумма чека для каждого клиента
+store.groupby('customer_name', as_index=False).agg(средний_чек = ('sales', 'mean')).round().sort_values('средний_чек', ascending = False)
+#36 Как часто клиенты совершают повторные покупки
+counts=store['customer_name'].value_counts().reset_index()
+filtr=counts[counts['count'] > 1]
+len(filtr)
+#len(counts)
+#len(count)
+#sort=store[store['customer_name'].map(count) > 1]
+#len(sort)
+#37 Сколько уникальных клиентвов  каждом сегменте рынка
+store.groupby('segment', as_index = False)['customer_name'].nunique()
+#38 В каком сегменте самая высокая прибыль на заказ
+store.groupby('segment')['profit'].mean().reset_index().round(2).sort_values('profit', ascending = False)
+#39 Клиенты, покупающие только убыточные товары
+tabl=store.groupby('customer_name')[['profit']].max()
+tabl=tabl[tabl['profit']<0]
+tabl
+#40 Какой клиент потратил больше всего на товары категории "Technology"
+tabl=store[store['category'] == 'Technology']
+tabl.groupby('customer_name')[['sales']].sum().round(2).nlargest(1, 'sales')
+#41 Есть ли клиенты, которые заказывают только в определенный месяц?
+store['month']=store['order_date'].dt.month_name()
+uniq=store.groupby('customer_name', as_index=False)['month'].nunique()
+uniq
+uniq=uniq[uniq['month'] <= 1]
+uniq 
+#42 Клиент, который получил самую большую суммарную скидку
+store['sum_disc']=store['sales']*store['discount'].reset_index(0)
+store.groupby('customer_name')[['sum_disc']].sum().reset_index().nlargest(1, 'sum_disc')
+#IV Анализ продуктов
+#43 Какая подкатегория товаров продается лучше всего в каждой стране
+table=store.groupby(['sub_category', 'country'])[['sales']].sum().reset_index()
+table['rnk']=table.groupby('country')[['sales']].rank(method = 'min', ascending = False)
+store.query('rnk == 1')[['sub_category', 'country', 'rnk']].reset_index()
+#44 Какая подкатегория товаров чаще всего возвращается (приносит убыток)
+table=store.query('profit < 0')
+table.groupby('sub_category').agg(profit = ('profit', 'sum')).reset_index().nsmallest(1, 'profit').round(2)
+#45 Какие товары чаще всего продаются со скидкой 
+df=store.query('discount > 0')
+df.groupby('product_name').size().reset_index(name = 'size').sort_values(by='size', ascending = False)
+#46 Какой товар продается в наибольшем количестве стран
+store.groupby('product_name')[['country']].nunique().reset_index().sort_values(by='country', ascending = False)
+#47 Самая высокая средняя цена по категории товара
+store['price']=store['sales']/store['quantity']
+store.groupby('product_name')[['price']].mean().reset_index().round(2).nlargest(1, 'price')
+#48 Средняя цена товара в каждой подкатегории
+store['price']=store['sales']/store['quantity']
+store.groupby('sub_category')[['price']].mean().reset_index().round(2).sort_values(by = 'price', ascending = False)
+#49 Какие товары имеют отрицательную прибыль, но высокие продажи?
+store=store.query('profit < 0')
+store[['product_name', 'profit', 'sales']].sort_values(by='sales', ascending = False)
+#50 Сколько уникальных товаров в каждой категории?
+store.groupby('category')['product_name'].nunique().reset_index().sort_values(by='product_name', ascending = False)
+#51 Какие подкатегории показывают рост продаж от года к году?
+sort=store.groupby(['sub_category', 'year'])[['sales']].sum().reset_index().sort_values(by=['sub_category', 'year'], ascending = True)
+sort['lag']=sort.groupby('sub_category')['sales'].shift(1)
+sort=sort.query('lag == lag and sales>lag').sort_values(by = ['sub_category', 'year'], ascending = True).round(3)
+sort
+#52 Какие товары покупают только клиенты из сегмента "Corporate"?
+corp=set(store.query('segment == "Corporate"')['product_name'])
+not_corp=set(store.query('segment != "Corporate"')['product_name'])
+sort=corp-not_corp
+sort
+#53 Какая подкатегория товаров чаще всего продается со скидкой > 0.5?
+store=store.query('discount > 0.5')
+store.groupby('sub_category').size().reset_index(name='size').nlargest(1, 'size')
+#V Географический анализ
+#54 В какой стране больше всего заказов
+store['country'].value_counts().nlargest(1) 
+#55 В какой стране самая высокая средняя прибыль на заказ?
+store.groupby('country')['profit'].mean().nlargest(1)
+#56 В каком регоине самая большая доля убыточных заказов
+abv=(store['profit'] < 0).groupby(store['region']).mean().mul(100).round(0).nlargest(1)
+abv
+#57 Сравнить эффективность (среднюю прибыль) по всем странам в регионе "EMEA".
+table=store.query('region == "EMEA"')
+table.groupby('country')['profit'].mean().sort_values(ascending = False).round()
+#58 В каких странах чаще всего используются разные способы доставки?
+table=store.groupby('country')['ship_mode'].nunique().reset_index(name = 'unique')
+table.query('unique > 1').sort_values(by = 'unique', ascending = False)
+#59 Есть ли корреляция между страной и предпочтением категории товаров?
+store[['country', 'category']].value_counts().reset_index(name = 'size').sort_values(by= ['country', 'size'], ascending = [True, False])
+#60 В каком штате/провинции (state) США больше всего продаж?
+table=store.query("country == 'United States'")
+table.groupby('state')[['sales']].sum().reset_index().sort_values(by='sales', ascending = False).round(0).nlargest(1, 'sales')
+#61 Какая страна за пределами США является самой прибыльной?
+table = store.query("country != 'United States'")
+table.groupby('country')[['profit']].sum().nlargest(1,'profit').round()
+#62 Как распределены продажи по континентам (market)?
+store.groupby('market')['sales'].sum().sort_values(ascending = False).round()
+#63 Какой способ доставки преобладает в каждой стране?
+table=store[['country', 'ship_mode']].value_counts().reset_index(name = 'size').sort_values(by = 'size', ascending = False)
+table['rnkd']=table.groupby('country')['size'].rank(method='min', ascending = False)
+table.query('rnkd == 1')
+#VI. Анализ Времени (Time Series)
+#64 Какой день недели (из order_date) самый "продажный"?
+store['day']=store['order_date'].dt.day_name()
+table=store.groupby('day')['sales'].sum().sort_values(ascending= False).round(0)
+table
+#65 Есть ли всплески продаж в определенные месяцы (например, праздничный сезон)?
+store['month']=store['order_date'].dt.month_name()
+store.groupby('month')['sales'].sum().sort_values(ascending = False).round(0)
+#66 Как меняется количество заказов по месяцам в течение всего периода?
+store['month']=store['order_date'].dt.month_name()
+store.groupby('month')['quantity'].sum().sort_values(ascending = False).round(0)
+#67 Как меняется средняя скидка по годам?
+store.groupby('year')['discount'].mean()*100
+#68 Есть ли тренд на рост/падение продаж от года к году?
+store.groupby('year')['sales'].sum().round(0)
+#69 Какой квартал года самый прибыльный?
+store['quarter']=store['order_date'].dt.quarter
+store.groupby('quarter')['profit'].sum().nlargest(1).round()
+#70 Есть ли сезонность в продажах офисных принадлежностей?
+table=store.query("category == 'Office Supplies'")
+table['quarter']=table['order_date'].dt.quarter
+table.groupby('quarter')['sales'].sum().sort_values(ascending = False).round()
+#71 Какой месяц характеризуется самыми большими скидками?
+store['month']=store['order_date'].dt.month_name()
+store.groupby('month')['discount'].mean().nlargest(1)
+#VII. Анализ Скидок (Discounts)
+#72 Какой процент заказов продается со скидкой?
+table=store.query('discount > 0')
+len(table)*100/len(store)
+#73 Какая средняя скидка по категориям товаров?
+store.groupby('category')['discount'].mean().mul(100).sort_values(ascending = False)
+#74 В какой подкатегории самые высокие средние скидки?
+store.groupby('sub_category')['discount'].mean().mul(100).sort_values(ascending = False).round(3)
+#75 Какой клиент получает самые высокие средние скидки?
+store.groupby('customer_name')['discount'].mean().mul(100).nlargest(1)
+#76 При какой скидке средняя прибыль становится отрицательной?
+store.groupby('discount')[['profit']].mean().query('profit < 0').sort_values(by = 'discount').head(1)
+#77 Есть ли связь между размером скидки и количеством проданного товара?
+table = store.query('discount > 0')
+table.groupby('discount')[['quantity']].mean().sort_values(by = 'discount').round(3)
+#78 В каком регионе дают самые большие скидки?
+store.groupby('region')['discount'].mean().mul(100).nlargest(1)
+#79 Как сегмент клиентов влияет на получаемую скидку?
+store.groupby('segment')[['discount']].mean()
+#80 Какие товары никогда не продаются без скидки?
+table=set(store.query('discount == 0')['product_name'])
+table2=set(store['product_name'])
+table3=table2-table
+
+#VIII. Анализ Способов Доставки (Shipping)
+#81 Какой способ доставки самый популярный?
+store['ship_mode'].value_counts()
+#82 Как способ доставки влияет на среднюю прибыль?
+store.groupby('ship_mode')['profit'].mean()
+#83 Какой способ доставки чаще всего используется для "High" приоритетных заказов?
+table=store.query('order_priority == "High"')
+table['ship_mode'].value_counts().nlargest(1)
+#84 Есть ли заказы, где выбран "Same Day", и какова их средняя стоимость?
+virok=store.query('ship_mode=="Same Day"')
+(virok['sales'] / virok['quantity']).mean()
+#85 Какая страна чаще всего использует "First Class" доставку?
+virok=store.query('ship_mode=="First Class"')
+virok['country'].value_counts().nlargest(1)
+#86 В какой категории товаров чаще всего используют "Standard Class"?
+virok=store.query('ship_mode== "Standard Class"')
+virok['category'].value_counts().nlargest(1)
+#87 Зависит ли выбор доставки от сезона (месяца)?
+store['Month']=store['order_date'].dt.month_name()
+virok=store.groupby(['Month', 'ship_mode']).size().reset_index(name = 'size').sort_values(by = 'size', ascending = False)
+virok['prcnt']=virok['size'] * 100.0 / virok.groupby('Month')['size'].transform('sum')
+virok['rnk']=virok.groupby('Month')['size'].rank(method='min', ascending = False)
+virok1=virok.query('rnk == 1')
+virok1.sort_values(by='Month')
+#IX. Связи и Корреляции (Взаимосвязи)
+#88 Корреляция между Sales и Profit
+store['sales'].corr(store['profit'])
+#89 Корреляция между Discount и Sales
+store['discount'].corr(store['sales'])
+#90 Влияет ли количество товаров в заказе (Quantity) на прибыльность?
+store['quantity'].corr(store['profit'])
+#91 Зависит ли Shipping Cost от Region?
+store.groupby('region')['shipping_cost'].mean().sort_values(ascending = False)
+#92 Есть ли связь между Order Priority и Ship Mode?
+#store[['ship_mode', 'order_priority']].value_counts()
+virok=pd.crosstab(store['ship_mode'], store['order_priority'])
+virok2=pd.crosstab(store['ship_mode'], store['order_priority'], normalize='index')*100
+virok
+
+#93 Зависит ли Sales от Segment и Category вместе?
+store.pivot_table(values='sales', index='segment', columns='category', aggfunc='mean')
+#94 Есть ли связь между страной и выбором категории товаров?
+pd.crosstab(store['country'], store['category'])
+#95 Влияет ли Discount на Shipping Cost?
+store['discount'].corr(store['shipping_cost'])
+#96 Корреляция между Profit и Quantity в разрезе подкатегорий
+store.groupby('sub_category')[['profit', 'quantity']].corr()
+#X. ТОП-N и Рейтинги
+#97 Топ-10 самых прибыльных подкатегорий
+store.groupby('sub_category')['profit'].sum().nlargest(10).round()
+#98 Топ-10 самых убыточных подкатегорий
+virok=store.query('profit < 0')
+virok.groupby('sub_category')['profit'].sum().nsmallest(10).round()
+#99 Топ-10 стран с самым высоким средним чеком
+store.groupby('country')['sales'].mean().nlargest(10).round()
+#100 Топ-5 клиентов с наибольшим количеством заказов в каждой стране.
+virok=store.groupby(['customer_name', 'country']).size().reset_index(name='size')
+virok['dense_rank']=virok.groupby('country')['size'].rank(method='dense', ascending = False)
+(virok.query('dense_rank==1')).sort_values(by='country')
+#101 Топ-3 товара по продажам в каждой категории
+virok=store.groupby(['category', 'product_name'])[['sales']].sum()
+virok['dense_rank']=virok.groupby('category')[['sales']].rank(method='dense', ascending = False)
+virok.query('dense_rank < 4').sort_values(by=['category', 'dense_rank'])
+#102 Топ-10 заказов с самой высокой маржинальностью
+store['marg']=(store['profit']/store['sales'])*100
+store[['order_id', 'marg']].nlargest(10, 'marg')
+#103 Топ-5 самых популярных товаров в "APAC" регионе
+virok=store.query('region == "APAC"')
+virok['product_name'].value_counts().nlargest(5)
+#XI. Фильтрация и Условия
+#104 Все заказы с Profit > 1000
+store.query('profit > 1000')
+#105 Все заказы с убытком (Profit < 0) и скидкой > 0.4.
+store.query('profit < 0 and discount > 0.4')
+#106 Заказы за 2012 год, где Quantity > 5
+store.query('year== 2012 and quantity > 5')
+#107 Заказы клиентов из сегмента "Consumer", сделанные в 2011 году
+store.query('segment == "Consumer" and year == 2011')
+#108 Товары категории "Technology", проданные в "United States"
+virok=store.query('category=="Technology" and country == "United States"')
+virok['product_name'].unique()
+#109 Заказы с доставкой "Second Class", где Shipping Cost > 100
+store.query('ship_mode == "Second Class" and shipping_cost > 100')
+
+#110 Заказы с прибылью, но с отрицательной маржинальностью (редкий случай)
+store.query('profit > 0 and (profit/sales) < 0') #???
+#111 Все уникальные товары, которые продавались в "Africa".
+virok=store.query('region == "Africa"')
+virok['product_name'].unique()
+#112 Клиенты, которые делали заказы и в 2011, и в 2012 годах
+virok=store.query('year == 2011')['customer_name']
+virok2=store.query('year==2012')['customer_name']
+set(virok) & set(virok2)
+
+#XII. Агрегации и Группировки (без временных рядов)
+
+#113 Средняя Sales, Quantity, Profit по каждому Segment.
+store.groupby('segment').agg(avg_sales = ('sales', 'mean'), avg_quantity=('quantity', 'mean'), avg_profit=('profit', 'mean')).round(3)
+#114 Суммарная Profit по каждой Category в разрезе Region.
+#store.pivot_table(values='profit', index='category', columns = 'region', aggfunc='sum').round()
+pd.crosstab(store['category'], store['region'], values=store['profit'], aggfunc='sum').round()
+#115 Количество заказов и средняя Discount по каждому Ship Mode
+store.groupby('ship_mode').agg(quant = ('quantity', 'size'), avg_disc=('discount', 'mean'))
+#116 Общая Sales и Profit для каждой страны
+store.groupby('country').agg(sal= ('sales', 'sum'), prof=('profit', 'sum'))
+#117 Максимальная, минимальная и средняя Shipping Cost по категориям
+store.groupby('category').agg(max = ('shipping_cost', 'max'), min = ('shipping_cost', 'min'))
+#118 Количество уникальных клиентов в каждой подкатегории товаров
+store.groupby('sub_category')['customer_name'].nunique()
+#XIII. Сравнительный Анализ
+
+#119 Сравнить продажи "Office Supplies" в США и Канаде
+virok=store.query('(country == "United States" or country == "Canada") and category == "Office Supplies"')
+virok.groupby('country')['sales'].sum().round()
+#120 Сравнить эффективность (среднюю прибыль) "Corporate" и "Consumer" сегментов в Европе
+virok=store.query('market == "EU" and (segment == "Corporate" or segment == "Consumer")')
+virok.groupby('segment')['profit'].mean()
+#121 Сравнить среднюю скидку для товаров с высокой и низкой прибылью.
+avg=store['profit'].mean()
+store['type']=np.where(store['profit'] < avg, 'low', np.where (store['profit'] > avg, 'high', ''))
+store.groupby('type')['discount'].mean()
+#122 Сравнить общую прибыль от "Furniture" в 2011 и 2012 годах.
+virok=store.query('category == "Furniture" and (year==2011 or year==2012 )')
+virok.groupby('year')['profit'].sum()
+#123 Сравнить количество заказов в "Standard Class" и "Second Class" по месяцам.
+store['month']=store['order_date'].dt.month_name()
+virok=store.query('ship_mode == "Standard Class" or ship_mode == "Second Class"')
+virok.pivot_table(index = 'month', columns = 'ship_mode', aggfunc='size')
+#XIV. Аномалии и Выбросы
+#124 Заказы с аномально высокой стоимостью доставки (Shipping Cost > 1000)
+store.query('shipping_cost > 1000')
+#125 Заказы с очень высокой скидкой (Discount > 0.9)
+store.query('discount > 0.9')
+#126 Найти заказы с положительной Sales и отрицательной Profit при Discount = 0. (Проверить на ошибки в данных)
+store.query('sales > 0 and profit < 0 and discount == 0')
+#127 Клиенты, которые сделали только один заказ, но с очень большой суммой
+virok=store.groupby('customer_name').agg(size = ('sales', 'size'), sum = ('sales', 'sum'))
+avg=store['sales'].mean()
+virok.query('size == 1 and sum > @avg')
+#128 Найти подкатегории с сильно различающейся маржинальностью.
+store['mrg']=store['profit']/store['sales']*100.0
+store.groupby('sub_category')['mrg'].std().sort_values(ascending=False)
+#129 Товары с необычно низкой ценой для своей категории
+store['price']=store['sales']/store['quantity']
+virok=store.groupby('category')['price'].transform('mean')
+virok=virok/2
+virok
+store.query('price < @virok')['product_name']
+#XV. Комбинированные и Сложные Запросы
+#130 Клиенты, которые купили товары из всех трех категорий (Furniture, Office Supplies, Technology)
+virok=store.groupby('customer_name')['category'].nunique().reset_index(name='unique')
+virok.query('unique == 3')['customer_name']
+#131 Заказы, где сумма скидки превышает стоимость доставки (Discount > Shipping Cost)
+store.query('sales*discount > shipping_cost')
+#132 Для каждого клиента найти его самый прибыльный и самый убыточный заказ
+store.groupby('customer_name').agg(most_profitable=('profit', 'max'), most_losable=('profit', 'min'))
+#133 Найти товары, которые продаются лучше всего в тех странах, где они же приносят наибольшую прибыль
+virok=store.groupby(['product_name', 'country']).agg(sprof= ('profit', 'sum'), ssal= ('sales', 'sum'))
+virok['rnkp']=virok.groupby('product_name')['sprof'].rank(method = 'dense', ascending = False)
+virok['rnks']=virok.groupby('product_name')['ssal'].rank(method = 'dense', ascending = False)
+virok.query('rnkp == 1 and rnks == 1')
+#134 Рассчитать долю каждой подкатегории в общей прибыли своей категории
+virok=store.groupby(['category', 'sub_category'])[['profit']].sum()
+virok['prcnt']=virok.groupby('category')['profit'].transform('sum')
+virok['prcnt']=(virok['profit'] * 100.0 / virok['prcnt']).round(2)
+virok
+#135 Определить, какие товары чаще всего покупают вместе (например, в одном заказе) 
+virok = store.merge(store, on='order_id', suffixes=('1', '2'))
+virok = virok[virok['product_name1'] < virok['product_name2']]
+virok2 = virok.groupby(['product_name1', 'product_name2']).size().nlargest(30)
+virok2
+#136 Найти клиентов, которые сменили сегмент (если такое возможно в данных)
+virok=store.groupby('customer_name')[['segment']].nunique()
+virok.query('segment > 1')
+#137 Рассчитать скользящую среднюю продаж за последние 3 месяца.
+store['month'] = store['order_date'].dt.to_period('M')
+virok = store.groupby('month')['sales'].sum().reset_index()
+virok['avg'] = virok['sales'].rolling(window=3, min_periods=1).mean().round(2)
+virok
+
+#XVI. Бизнес-Запросы
+#138 Предложить список товаров, на которые стоит повысить цену (высокий спрос, высокая маржа)
+virok=store.groupby(['product_name', 'category']).agg(profits = ('profit', 'sum'), saless= ('sales', 'sum'), quantitys= ('quantity', 'sum')).reset_index()
+virok['qua_avg']=virok.groupby('category')['quantitys'].transform('mean')
+virok['marga']=virok['profits'] * 100.0 / virok['saless']
+virok
+virok.query('quantitys > qua_avg and marga > 20')
+
+#139 Предложить список товаров, на которые стоит дать скидку (чтобы распродать)
+virok=store.groupby(['product_name', 'category']).agg(profits = ('profit', 'sum'), saless= ('sales', 'sum'), quantitys= ('quantity', 'sum')).reset_index()
+virok['qua_avg']=virok.groupby('category')['quantitys'].transform('mean')
+virok['marga']=virok['profits'] * 100.0 / virok['saless']
+virok
+virok.query('quantitys < qua_avg and marga < 10')
+#140 В каких странах стоит открыть новый склад (высокие продажи, высокие затраты на доставку)?
+virok=store.groupby('country').agg(saless=('sales', 'sum'), scs=('shipping_cost', 'sum')).reset_index()
+virok['avg_sal']=virok['saless'].mean()
+virok['scs_avg']=virok['scs'].mean()
+virok.query('saless>avg_sal and scs>scs_avg')['country']
+#141 Какой сегмент клиентов наиболее лоялен и приносит больше всего прибыли?
+virok=store.groupby('segment').agg(uniq=('customer_name', 'nunique'), size=('segment', 'size'), profits=('profit', 'sum')).reset_index()
+virok['count_for_1']=virok['size']*1.00/virok['uniq']
+virok
+#142 На сколько нужно увеличить продажи в самом убыточном регионе, чтобы выйти в ноль?
+store.groupby('region')['profit'].sum().sort_values()
+#нет убыточных
+# 143 Какие категории товаров требуют большего маркетингового внимания (низкие продажи, но высокий потенциал)?
+virok=store.groupby('category').agg(saless=('sales','sum'), profits = ('profit', 'sum'))
+virok['mrga']=virok['profits'] * 100.0 / virok['saless']
+virok['avg']=virok['saless'].mean()
+virok['avg_m']=virok['mrga'].mean()
+virok.query('saless<avg and mrga>avg_m')
+#144 Оценить влияние скидок на общую прибыль компании
+#store['discount'].corr(store['profit'])
+store['column']=pd.cut(store['discount'], bins=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 1], labels = ['0-10%', '10-20%', '20-30%', '30-40%', '40-50%', '50%+'])
+store.groupby('column', as_index=False).agg(avg=('profit', 'mean'), prof=('profit', 'sum'), size = ('column', 'size'))
+#virok=store.query('discount == 0')
+#virok['profit'].sum(), virok['profit'].size
+#virok2=store.query('discount > 0')
+#virok2['profit'].sum(), virok2['profit'].size
+
+
+#145 Спрогнозировать продажи на следующий месяц на основе исторических данных
+store['rolling_3m'] = store['sales'].rolling(window=3).mean()
+store['rolling_3m'].iloc[-1]
+
+#XVII. Data Quality (Качество Данных)
+#146 Есть ли дубликаты заказов (order_id)?
+store['order_id'].duplicated().sum()
+#147 Есть ли пропущенные значения в ключевых полях (например, sales, profit)?
+store[['sales', 'profit']].isna().sum()
+#148 Корректны ли даты (order_date > ship_date)? (Проверка)
+(store['ship_date'] < store['order_date']).sum()
+#149 Есть ли отрицательные значения Sales или Quantity?
+store.query('sales < 0 or quantity < 0')
+
+#150 Есть ли заказы с Profit = 0, но Sales > 0?
+store.query('profit == 0 and sales > 0')
+#XVIII. Анализ по State (Штаты/Провинции)
+#151 Какие 5 штатов в США приносят больше всего прибыли?
+store.groupby('state')['profit'].sum().nlargest(5)
+#152 В каком штате США самая высокая средняя стоимость доставки?
+store.groupby('state')['shipping_cost'].mean().nlargest(1)
+#153 Есть ли штаты, где продажи "Technology" превышают продажи "Office Supplies"?
+virok1=store.query('category == "Technology"')
+virok2=store.query('category == "Office Supplies"')
+virok3=virok1.groupby('state')[['sales']].sum()
+virok4=virok2.groupby('state')[['sales']].sum()
+virok5=virok3.merge(virok4, on = 'state', suffixes=('_tech', '_office'))
+virok5.query('sales_tech > sales_office')
+
+#154 Какой штат США имеет самый высокий процент убыточных заказов?
+store['los'] = store['profit'] < 0
+virok = store.groupby('state').agg(total_orders=('order_id', 'size'), loss_orders=('los', 'sum'))
+virok['loss_pct'] = virok['loss_orders'] / virok['total_orders'] * 100
+virok
+#155 В каком штате покупают больше всего мебели?
+virok=store.query('category=="Furniture"')
+virok.groupby('state')[['sales']].sum().sort_values(by = 'sales', ascending = False).head(1)
+#XIX. Продуктовые "Корзины"
+#156 Какие товары часто покупаются вместе с "Xerox 195"?
+virok=store.query('product_name == "Xerox 195"')
+virok2=virok['order_id'].unique()
+virok3=store[store['order_id'].isin(virok2)]
+virok3['product_name'].value_counts()
+
+#157 Какие подкатегории чаще всего встречаются в одном заказе?
+virok = store[['order_id', 'sub_category']].drop_duplicates()
+virok = virok.merge(virok, on='order_id', suffixes=('_1', '_2'))
+virok = virok[virok['sub_category_1'] < virok['sub_category_2']]
+virok2 = (virok.groupby(['sub_category_1', 'sub_category_2']).agg(times_together=('order_id', 'nunique')).reset_index().sort_values('times_together', ascending=False))
+virok2
+#158 Создать список топ-10 пар товаров, которые покупают вместе.
+virok = store[['order_id', 'product_name']].drop_duplicates()
+virok = virok.merge(virok, on='order_id', suffixes=('_1', '_2'))
+virok = virok[virok['product_name_1'] < virok['product_name_2']]
+virok2 = (virok.groupby(['product_name_1', 'product_name_2']).agg(times_together=('order_id', 'nunique')).reset_index().sort_values('times_together', ascending=False))
+virok2.head(10)
+#159 Рассчитать среднее время доставки (ship_date - order_date) для каждого способа доставки
+store['diff']=store['ship_date']-store['order_date']
+store.groupby('ship_mode')[['diff']].mean().sort_values(by = 'diff', ascending = False)
+#160 Зависит ли время доставки от географического региона?
+store['diff']=store['ship_date']-store['order_date']
+store.groupby('region')[['diff']].mean().sort_values(by = 'diff', ascending = False)
+#161 Есть ли корреляция между временем доставки и прибылью заказа?
+store['diff']=store['ship_date']-store['order_date']
+store['diff'].corr(store['profit'])
+#162 В каких странах самое долгое время доставки?
+store['diff']=store['ship_date']-store['order_date']
+store.groupby('country')[['diff']].mean().sort_values(by = 'diff', ascending = False)
+
+#163 Как приоритет заказа влияет на время доставки?
+store['diff']=store['ship_date']-store['order_date']
+store.groupby('order_priority')[['diff']].mean().sort_values(by = 'diff', ascending = False)
+
+#164 Рассчитать Profit per Unit (Прибыль на единицу товара: Profit / Quantity) для каждого товара.
+virok=store.groupby('product_name', as_index=False).agg(prs=('profit', 'sum'), quas=('quantity', 'sum'))
+virok['ppu']=virok['prs']/virok['quas']
+virok[['product_name', 'ppu']]
+
+
+#165 Топ-10 товаров с самым высоким Profit per Unit.
+virok=store.groupby('product_name', as_index=False).agg(profs=('profit', 'sum'), quas= ('quantity', 'sum'))
+virok['ppu']=virok['profs']/virok['quas']
+virok[['product_name', 'ppu']].nlargest(10, 'ppu')
+#166 Топ-10 товаров с самым низким Profit per Unit.
+virok=store.groupby('product_name', as_index=False).agg(profs=('profit', 'sum'), quas= ('quantity', 'sum'))
+virok['ppu']=virok['profs']/virok['quas']
+virok[['product_name', 'ppu']].nsmallest(10, 'ppu')
+
+#XXII. Анализ Возвратов (Приблизительный, через отрицательную прибыль)
+#167 Какая подкатегория товаров имеет самый высокий "процент возвратов" (отрицательная прибыль в заказах)?
+(store.groupby('sub_category')['profit'].apply(lambda x: (x < 0).sum() / x.size)*100.0).nlargest(1)
+
+#168 В каком месяце было больше всего "возвратов" (отрицательных заказов)?
+store['month']=store['order_date'].dt.month_name()
+store.groupby('month')['profit'].apply(lambda x: (x < 0).sum()/x.size) * 100.0
+#169 Есть ли связь между скидкой и вероятностью "возврата" (убытка)?
+store['status']=np.where(store['profit'] < 0, 'Убыток', np.where (store['profit'] > 0, 'Прибыль', 'Нулевой профит'))
+store['status2']=np.where(store['discount'] < 0, 'Нет скидки', np.where (store['discount'] <= 0.1, 'Скидка <=10%', np.where (store['discount'] <= 0.2, 'Скидка <=20%', 'Скидка более 20 %')))
+store.pivot_table(index=['status', 'status2'], values = 'profit', aggfunc='mean')
+
