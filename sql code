@@ -1,0 +1,502 @@
+SELECT * FROM superstoreorders_clear;
+ALTER TABLE superstoreorders_clear RENAME TO store;
+SELECT * FROM store;
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'store';
+ALTER TABLE store
+ALTER COLUMN profit TYPE NUMERIC
+USING profit::NUMERIC;
+ALTER TABLE store ALTER COLUMN discount TYPE NUMERIC (10, 4);
+UPDATE store
+SET;
+SELECT COUNT(profit) FROM store;
+SELECT profit FROM store WHERE profit LIKE '%,%';
+sales = REPLACE (sales, ',', '.');
+COLUMN order_date TYPE DATE USING order_date::DATE,
+ALTER COLUMN ship_date TYPE DATE USING ship_date::DATE;
+--
+SELECT * FROM store;
+-- I. Базовые Статистики и Общие Сведения
+--1 Каково общее количество заказов в датасете?
+SELECT COUNT (*) FROM store;
+--2 Сколько уникальных клиентов совершили покупки?
+SELECT COUNT (DISTINCT (customer_name)) FROM store;
+--3 Уникальные клиенты
+SELECT DISTINCT(customer_name) FROM store;
+--4 В скольких уникальных странах представлены заказы?
+SELECT COUNT(DISTINCT(country)) FROM store;
+--5 Каковы общие показатели продаж (Sales), прибыли (Profit) и количества (Quantity)?
+SELECT ROUND(AVG (sales)) AS "Сренее продаж", ROUND(AVG (profit)) AS "Средний профит", ROUND(AVG (quantity)) AS "Среднее колисетво покупок в заказ" FROM store; --#разное среднее значение по продажам в питон и скл, щя будем фиксить это
+SELECT COUNT (*) FROM store;
+SELECT MAX(sales) FROM store;
+SELECT MIN(sales) FROM store;
+SELECT SUM(sales) FROM store;
+SELECT sales FROM store LIMIT 20;
+SELECT sales FROM store ORDER BY sales DESC LIMIT 20;
+SELECT COUNT (sales) FROM store WHERE sales LIKE '%,1%'; -- fixed
+--6 Какой процент от общей прибыли приходится на топ-10% заказов?
+SELECT ROUND(COUNT(DISTINCT(product_name))*10/100) FROM store; -- 10 процентов от всех товаров
+WITH profit_top_10 AS (SELECT product_name, ROUND(SUM(profit)) AS "Профит на товар" FROM store GROUP BY product_name ORDER BY "Профит на товар" DESC 
+LIMIT (SELECT COUNT(DISTINCT(product_name))*10/100 FROM store)),
+sum_of_profit_top_10 AS (SELECT ROUND(SUM("Профит на товар")) AS "Весь профит на топ 10" FROM profit_top_10)
+SELECT (SELECT ROUND(SUM("Весь профит на топ 10")) FROM sum_of_profit_top_10) * 100 / (SELECT ROUND(SUM(profit)) FROM store) AS "Процент выручки на топ 10 товаров";
+--7 Распределение по приоритетам
+SELECT order_priority, COUNT(*) AS "count_of_order_priority", COUNT(*) * 100/(SELECT (COUNT(order_priority)) FROM store) AS "percentage"
+FROM store GROUP BY order_priority ORDER BY "count_of_order_priority" DESC;
+--8 Самый прибыльный год
+SELECT year, ROUND(SUM(profit)) AS "profit_for_year" FROM store GROUP BY year ORDER BY "profit_for_year" DESC;
+--9 Уникальные категории и подкатегории товаров
+SELECT COUNT(DISTINCT(category)) AS "count_of_distinct_category", COUNT(DISTINCT(sub_category)) AS "count_of_dist_sub_category" FROM store;
+--10 Соотношение заказов с разными способами доставки
+SELECT ship_mode, COUNT (ship_mode) AS "count_of_mode", COUNT (ship_mode) * 100 / (SELECT COUNT(ship_mode) FROM store) AS "percentage" FROM store GROUP BY ship_mode ORDER BY "count_of_mode" DESC;
+--II. Продажи и Прибыль
+--11 Какая категория товаров приносит наибольшую прибыль 
+SELECT category, SUM(profit) AS "profit_for_category" FROM store GROUP BY category ORDER BY "profit_for_category" DESC; --чуть несовпадение
+--SELECT SUM(profit) FROM store;
+--SELECT MAX(profit), MIN (profit) FROM store;
+--SELECT product_name, profit FROM store ORDER BY profit DESC LIMIT 10; 
+--12 Какая подкатегория приносит наибольший доход
+SELECT sub_category, (SUM(sales)) AS "Выручка" FROM store GROUP BY sub_category ORDER BY "Выручка" DESC LIMIT 1;
+--13 Топ 10 товаров, которые лучшие по количеству
+SELECT product_name, ROUND(SUM(quantity)) AS "Количество" FROM store GROUP BY product_name ORDER BY "Количество" DESC LIMIT 10;
+--14 Топ 10 товаров, которые приносят наибольшую прибыль
+SELECT product_name, ROUND(SUM(profit)) AS "profit" FROM store GROUP BY product_name ORDER BY "profit" DESC LIMIT 10;
+--15 Товары, приносящие наибольший убыток 
+SELECT product_name, ROUND(SUM(profit)) AS "profit" FROM store GROUP BY product_name HAVING ROUND(SUM(profit)) < 0 ORDER BY "profit" LIMIT 10;
+--16 Средняя прибыль на один заказ в каждой категории
+--SELECT category, ROUND(SUM(profit)/COUNT (profit), 2) AS "Средняя прибыль на заказ" FROM store GROUP BY category ORDER BY "Средняя прибыль на заказ" DESC; Я чет про AVG забыл начал вручную
+SELECT category, ROUND(AVG(profit), 2) AS "Средняя прибыль на заказ" FROM store GROUP BY category ORDER BY "Средняя прибыль на заказ" DESC;
+--17 Маржинальность для каждой подкатегории
+SELECT sub_category, ROUND((NULLIF(SUM(profit), 0)) / (NULLIF(SUM(sales), 0)), 2) AS "Маржинальность" FROM store GROUP BY sub_category ORDER BY "Маржинальность" DESC;
+--18 Как меняется средняя прибыль в зависимости от приолритета заказа
+SELECT order_priority, ROUND(AVG(profit)) AS "Средний профит на заказ" FROM store GROUP BY order_priority ORDER BY "Средний профит на заказ" DESC;
+--19 Как способ доставки влияет на прибыльность заказа
+SELECT ship_mode, ROUND(AVG(profit)) AS "Профит_на_заказ" FROM store GROUP BY ship_mode ORDER BY "Профит_на_заказ" DESC; 
+--20 Есть ли корреляция между скидкой (дискаунт) и общей прибылью
+SELECT CASE WHEN discount > 0 THEN 'Есть скидка'
+WHEN discount = 0 THEN 'Скидка нулевая' ELSE 'Баг, скидка минусовая' END AS "Classification", ROUND(SUM(profit)) AS "Общая выручка", COUNT (*) FROM store 
+GROUP BY "Classification" ORDER BY "Общая выручка" DESC;
+--21 При какой скидке идет большой убыток
+SELECT DISTINCT(discount), COUNT(*) FROM store GROUP BY DISTINCT(discount);
+SELECT CASE 
+	WHEN discount = 0 THEN 'Скидка нема'
+	WHEN discount <= 0.1 THEN 'Скидка 1-10%'
+    WHEN discount <= 0.2 THEN 'Скидка 11-20%'
+    WHEN discount <= 0.3 THEN 'Скидка 21-30%'
+    WHEN discount <= 0.4 THEN 'Скидка 31-40%'
+    WHEN discount <= 0.5 THEN 'Скидка 41-50%'
+    WHEN discount <= 0.6 THEN 'Скидка 51-60%'
+    WHEN discount <= 0.7 THEN 'Скидка 61-70%'
+    WHEN discount <= 0.8 THEN 'Скидка 71-80%'
+    WHEN discount <= 0.9 THEN 'Скидка 81-90%'
+    WHEN discount <= 1 THEN 'Скидка 91-100%'
+    ELSE 'Другое' END AS "Classification", ROUND(AVG(profit)) AS "average", COUNT (*) FROM store GROUP BY "Classification" ORDER BY "average" DESC;
+SELECT COUNT(*) FROM store WHERE discount IS NULL;
+SELECT SUM(profit) FROM store;
+SELECT COUNT(*) FROM store WHERE discount > 0 AND discount <=0.1;
+SELECT MIN(discount), MAX(discount) FROM store WHERE discount > 0 AND discount <=0.1;
+SELECT MIN(discount), MAX(discount) FROM store;
+SELECT DISTINCT(discount) as "уник" FROM store ORDER BY "уник" DESC;
+SELECT SUM(discount) as "уник" FROM store ORDER BY SUM(discount) DESC;
+SELECT discount, COUNT(*) FROM store GROUP BY discount ORDER BY COUNT(*) DESC;
+SELECT SUM (count) FROM (SELECT CASE 
+	WHEN discount = 0 THEN 'Скидка нема'
+	WHEN discount <= 0.1 THEN 'Скидка 1-10%'
+    WHEN discount <= 0.2 THEN 'Скидка 11-20%'
+    WHEN discount <= 0.3 THEN 'Скидка 21-30%'
+    WHEN discount <= 0.4 THEN 'Скидка 31-40%'
+    WHEN discount <= 0.5 THEN 'Скидка 41-50%'
+    WHEN discount <= 0.6 THEN 'Скидка 51-60%'
+    WHEN discount <= 0.7 THEN 'Скидка 61-70%'
+    WHEN discount <= 0.8 THEN 'Скидка 71-80%'
+    WHEN discount <= 0.9 THEN 'Скидка 81-90%'
+    WHEN discount <= 1 THEN 'Скидка 91-100%'
+    ELSE 'Другое' END AS "Classification", ROUND(AVG(profit)) AS "average", COUNT (*) FROM store GROUP BY "Classification" ORDER BY "average" DESC);
+--22 Общие продажи и прибыль по месяцам/кварталам
+SELECT TO_CHAR(order_date, 'Month') AS "month", SUM(sales) AS "Выручка", SUM (profit) as "профит", (SUM (profit)*100)/SUM(sales) AS "Профит_от_Выручки"
+FROM store GROUP BY month ORDER BY "Выручка" DESC;
+SELECT EXTRACT('QUARTER' FROM order_date) AS "quarter", SUM(sales) AS "Выручка", SUM (profit) AS "Профит", SUM(profit)*100/SUM(sales) AS "Профит_от_выручки"
+FROM store GROUP BY quarter ORDER BY "Выручка" DESC;
+--23 Самый прибыльный месяц
+SELECT TO_CHAR(order_date, 'Month') AS "month", (SUM(profit)) AS "профит" FROM store GROUP BY month ORDER BY "профит" DESC LIMIT 1;
+--24 Сезонность в продажах определенных категорий
+SELECT sub_category, TO_CHAR(order_date, 'Month') AS "month", ROUND(SUM(quantity)) AS "Количество", RANK() OVER(PARTITION BY sub_category ORDER BY ROUND(SUM(quantity)) DESC),
+ROUND(SUM(quantity)*100/SUM(SUM(quantity)) OVER (PARTITION BY sub_category), 2)
+FROM store GROUP BY sub_category, month ORDER BY sub_category, Количество DESC;
+--25 Какой сегмент рынка приносит наибольшую прибыль
+SELECT * FROM store;
+SELECT segment, ROUND(SUM(profit)) AS profit FROM store GROUP BY  segment ORDER BY profit DESC LIMIT 1;
+--26 В каком регионе самые высокие продажи
+SELECT region, ROUND(SUM(sales)) AS выручка FROM store GROUP BY region ORDER BY выручка DESC LIMIT 1;
+--27 В каком регионе самая высокая средняя прибыль на заказ
+SELECT region, ROUND(AVG(profit),2) AS "average" FROM store GROUP BY region ORDER BY average DESC LIMIT 1;
+--28 Какая страна является самым крупным рынком по объему продаж
+SELECT country, ROUND(SUM(sales)) AS "Объем_продаж", ROUND(SUM(sales)*100/SUM (SUM(sales)) OVER (), 2) AS prcnt FROM store GROUP BY country ORDER BY "Объем_продаж" DESC LIMIT 1;
+--29 Какие 5 стран приносят набиольшую прибыль
+SELECT country, ROUND(SUM(profit)) AS "Профит" FROM store GROUP BY country ORDER BY "Профит" DESC LIMIT 5;
+--30 Динамика продаж по годам
+SELECT EXTRACT('Year' FROM order_date) AS "Год", ROUND(SUM(sales)) AS "Продажи" FROM store GROUP BY "Год" ORDER BY "Продажи" DESC;
+--III. Клиентская аналитика
+--31 Самый крупный клиент по общей сумме заказов
+SELECT customer_name, ROUND(SUM(sales)) AS "сумма заказов" FROM store GROUP BY customer_name ORDER BY "сумма заказов" DESC LIMIT 1;
+--32 Самый прибыльный клиент
+SELECT customer_name, ROUND(SUM(profit)) AS "profit" FROM store GROUP BY customer_name ORDER BY "profit" DESC LIMIT 1;
+--33 Кто из клиентов совершил больше всего заказов
+SELECT customer_name, ROUND(SUM(quantity)) AS "quantity" FROM store GROUP BY customer_name ORDER BY "quantity" DESC LIMIT 1;
+--34 Клиенты котоыре приносят больший убыток
+SELECT customer_name, ROUND(SUM(profit)) AS "Убыток" FROM store WHERE profit < 0 GROUP BY customer_name ORDER BY "Убыток" LIMIT 10;
+--35 Средняя сумма чека для каждого клиента
+SELECT customer_name, ROUND(AVG(sales)) AS "средний_чек" FROM store GROUP BY customer_name ORDER BY средний_чек DESC; 
+--36 Как часто клиенты совершают повторные покупки
+WITH счёт AS (SELECT customer_name, COUNT(*) AS "повторные_заказы" FROM store GROUP BY customer_name HAVING COUNT(*) > 1 ORDER BY повторные_заказы desc)
+SELECT COUNT(*) AS "колво"  FROM счёт;
+SELECT COUNT(DISTINCT(customer_name)) FROM store;
+SELECT customer_name, COUNT(*) AS "repeat" FROM store GROUP BY customer_name HAVING COUNT(*) <= 29;
+SELECT COUNT(*) FROM store;
+--37 Сколько уникальных клиентвов  каждом сегменте рынка
+SELECT segment, COUNT(DISTINCT(customer_name)) AS "Количество_уник_клиентов" FROM store GROUP BY segment ORDER BY "Количество_уник_клиентов" DESC;
+--38 В каком сегменте самая высокая прибыль на заказ
+SELECT segment, ROUND(AVG(profit), 2) AS "profit" FROM store GROUP BY segment ORDER BY profit DESC;
+--39 Клиенты, покупающие только убыточные товары
+SELECT * FROM store;
+SELECT customer_name FROM store GROUP BY customer_name HAVING MAX(profit) < 0;
+--40 Какой клиент потратил больше всего на товары категории "Technology"
+SELECT customer_name, ROUND(SUM(sales), 2) AS "Потрачено" FROM store WHERE category = 'Technology' GROUP BY customer_name ORDER BY "Потрачено" DESC LIMIT 1;
+--41 Есть ли клиенты, которые заказывают только в определенный месяц?
+SELECT customer_name, MAX(TO_CHAR(order_date, 'Month')) AS "месяц" FROM store GROUP BY customer_name HAVING(COUNT(DISTINCT EXTRACT('Month' FROM order_date)) <= 1);
+--42 Клиент, который получил самую большую суммарную скидку
+SELECT customer_name, ROUND(SUM (sales * discount), 3) AS "Скидка" FROM store GROUP BY customer_name ORDER BY "Скидка" DESC LIMIT 1;
+--IV Анализ продуктов
+--43 Какая подкатегория товаров продается лучше всего в каждой стране
+WITH bub AS (SELECT sub_category, country, ROUND(SUM(sales), 2) AS "продажа", RANK () OVER (PARTITION BY country ORDER BY SUM(sales) DESC) AS "rnk" FROM store 
+GROUP BY sub_category, country ORDER BY rnk)
+SELECT sub_category, country, rnk FROM bub WHERE rnk = 1;
+--44 Какая подкатегория товаров чаще всего возвращается (приносит убыток)
+SELECT sub_category, ROUND(SUM(profit), 2) AS "убыток" FROM store WHERE profit < 0 GROUP BY sub_category ORDER BY убыток LIMIT 1;
+--45 Какие товары чаще всего продаются со скидкой 
+SELECT product_name, COUNT(*) AS "количество" FROM store WHERE discount > 0 GROUP BY product_name ORDER BY количество DESC;
+--46 Какой товар продается в наибольшем количестве стран
+SELECT product_name, COUNT(DISTINCT(country)) AS "Количество стран" FROM store GROUP BY product_name ORDER BY "Количество стран" DESC;
+--47 Самая высокая средняя цена по категории товара
+SELECT product_name, ROUND(AVG(sales/quantity), 2) AS "Средняя цена" FROM store GROUP BY product_name ORDER BY "Средняя цена" DESC LIMIT 1;
+--48 Средняя цена товара в каждой подкатегории
+SELECT sub_category, ROUND(AVG(sales/quantity), 2) AS "средняя цена" FROM store GROUP BY sub_category ORDER BY "средняя цена" DESC;
+--49 Какие товары имеют отрицательную прибыль, но высокие продажи?
+SELECT product_name, profit, sales FROM store WHERE profit < 0 ORDER BY sales DESC;
+--50 Сколько уникальных товаров в каждой категории?
+SELECT category, COUNT(DISTINCT(product_name)) AS "UNIQUE" FROM store GROUP BY category ORDER BY "UNIQUE" DESC;
+SELECT COUNT(*) FROM store;
+--51 Какие подкатегории показывают рост продаж от года к году?
+WITH yearly AS ( SELECT sub_category, year, SUM(sales) AS "Продажи" FROM store GROUP BY sub_category, year),
+lagger AS (SELECT sub_category, year, "Продажи", LAG ("Продажи") OVER(PARTITION BY sub_category ORDER BY year) AS "prev" FROM yearly)
+SELECT sub_category, year, "Продажи", "prev", "Продажи" - "prev" AS "разница" FROM lagger WHERE "prev" IS NOT NULL AND "Продажи" > "prev";
+--52 Какие товары покупают только клиенты из сегмента "Corporate"?
+SELECT DISTINCT product_name FROM store WHERE segment = 'Corporate' AND product_name NOT IN (SELECT product_name FROM store WHERE segment != 'Corporate');
+--53 Какая подкатегория товаров чаще всего продается со скидкой > 0.5?
+SELECT sub_category, COUNT(*) AS "Количество" FROM store WHERE discount > 0.5 GROUP BY sub_category ORDER BY "Количество" DESC limit 1;
+--V Географический анализ
+--54 В какой стране больше всего заказов
+SELECT country, COUNT(*) AS "Количество" FROM store GROUP BY country ORDER BY "Количество" DESC LIMIT 1;
+--55 В какой стране самая высокая средняя прибыль на заказ?
+SELECT country, ROUND(AVG(profit), 2) AS "Средняя прибыль" FROM store GROUP BY  country ORDER BY "Средняя прибыль" DESC LIMIT 1;
+--56 В каком регоине самая большая доля убыточных заказов
+SELECT * FROM store;
+SELECT region, SUM(CASE WHEN profit < 0 THEN 1 ELSE 0 END)*100/COUNT(*) AS "Доля" FROM store GROUP BY region ORDER BY "Доля" desc limit 1;
+--57 Сравнить эффективность (среднюю прибыль) по всем странам в регионе "EMEA".
+SELECT country, ROUND(AVG(profit)) AS "средняя прибыль" FROM store WHERE region = 'EMEA' GROUP BY country ORDER BY "средняя прибыль" DESC;
+--58 В каких странах чаще всего используются разные способы доставки?
+SELECT country, COUNT(DISTINCT(ship_mode)) AS "Способ_доставки" FROM store GROUP BY country HAVING COUNT(DISTINCT(ship_mode)) > 1 ORDER BY "Способ_доставки" DESC;
+--59 Есть ли корреляция между страной и предпочтением категории товаров?
+SELECT country, category, COUNT(*) AS "category_count" FROM store GROUP BY country, category ORDER BY country, category_count DESC;
+--60 В каком штате/провинции (state) США больше всего продаж?
+SELECT state, ROUND(SUM(sales)) AS "sales" FROM store WHERE country = 'United States' GROUP BY state ORDER BY sales DESC LIMIT 1;
+--61 Какая страна за пределами США является самой прибыльной?
+SELECT country, ROUND(SUM(profit)) AS profit FROM store WHERE country != 'United States' GROUP BY country ORDER BY profit DESC LIMIT 1;
+--62 Как распределены продажи по континентам (market)?
+SELECT market, ROUND(SUM(sales)) AS "sales" FROM store GROUP BY market ORDER BY sales DESC;
+--63 Какой способ доставки преобладает в каждой стране?
+WITH table_1 AS (SELECT country, ship_mode, COUNT(ship_mode) AS ship_mode_count,
+RANK () OVER (PARTITION BY country ORDER BY COUNT(ship_mode) DESC) AS rnkd
+FROM store GROUP BY country, ship_mode
+ORDER BY country ASC, ship_mode_count DESC)
+SELECT country, ship_mode, ship_mode_count, rnkd FROM table_1 WHERE rnkd = 1 ORDER BY ship_mode_count DESC;
+--VI. Анализ Времени (Time Series)
+--64 Какой день недели (из order_date) самый "продажный"?
+SELECT TO_CHAR(order_date, 'DAY') AS "day", ROUND(SUM(sales)) AS sales FROM store GROUP BY day ORDER BY sales DESC;
+--65 Есть ли всплески продаж в определенные месяцы (например, праздничный сезон)?
+SELECT TO_CHAR(order_date, 'Month') AS month, ROUND(SUM(sales)) AS sales FROM store GROUP BY month ORDER BY sales DESC;
+--66 Как меняется количество заказов по месяцам в течение всего периода?
+SELECT TO_CHAR(order_date, 'Month') AS month, ROUND(SUM(quantity)) AS quantity FROM store GROUP BY month ORDER BY quantity DESC;
+--67 Как меняется средняя скидка по годам?
+SELECT year, ROUND(AVG(discount), 6) * 100 AS discount FROM store GROUP BY year ORDER BY year;
+--68 Есть ли тренд на рост/падение продаж от года к году?
+SELECT year, ROUND(SUM(sales)) AS sales FROM store GROUP BY year ORDER BY year;
+--69 Какой квартал года самый прибыльный?
+SELECT TO_CHAR(order_date, 'Q') AS quarter, ROUND(SUM(profit)) AS profit FROM store GROUP BY quarter ORDER BY profit DESC limit 1;
+--70 Есть ли сезонность в продажах офисных принадлежностей?
+SELECT TO_CHAR(order_date, 'Q') AS quarter, ROUND(SUM(sales)) AS sales FROM store WHERE category='Office Supplies' GROUP BY quarter ORDER BY sales DESC;
+--71 Какой месяц характеризуется самыми большими скидками?
+SELECT TO_CHAR(order_date, 'Month') AS month, ROUND(AVG(discount), 6) * 100 AS avg_discount FROM store GROUP BY month ORDER BY avg_discount DESC LIMIT 1;
+--VII. Анализ Скидок (Discounts)
+--72 Какой процент заказов продается со скидкой?
+SELECT COUNT (*) * 100.0/ (SELECT COUNT(*) FROM store) AS prcnt FROM store WHERE discount > 0;
+--73 Какая средняя скидка по категориям товаров?
+SELECT category, ROUND(AVG(discount), 5) * 100 AS discount FROM store GROUP BY category ORDER BY discount DESC;
+--74 В какой подкатегории самые высокие средние скидки?
+SELECT sub_category, ROUND((AVG(discount) * 100), 3) AS discount FROM store GROUP BY sub_category ORDER BY discount DESC;
+--75 Какой клиент получает самые высокие средние скидки?
+SELECT customer_name, AVG(discount) * 100 AS discount FROM store GROUP BY customer_name ORDER BY discount DESC LIMIT 1;
+--76 При какой скидке средняя прибыль становится отрицательной?
+SELECT discount, AVG(profit) as profit FROM store GROUP BY discount HAVING AVG(profit) < 0 ORDER BY discount LIMIT 1;
+--77 Есть ли связь между размером скидки и количеством проданного товара?
+SELECT discount, ROUND(AVG(quantity),3) AS quantity FROM store WHERE discount > 0 GROUP BY discount ORDER BY discount;
+--78 В каком регионе дают самые большие скидки?
+SELECT region, AVG(discount) * 100 AS discount FROM store GROUP BY region ORDER BY discount DESC;
+--79 Как сегмент клиентов влияет на получаемую скидку?
+SELECT * FROM store;
+SELECT segment, AVG(discount) FROM store GROUP BY segment ORDER BY AVG(discount) DESC;
+--80 Какие товары никогда не продаются без скидки?
+SELECT DISTINCT product_name FROM store WHERE product_name NOT IN (SELECT product_name FROM store WHERE discount = 0);
+--VIII. Анализ Способов Доставки (Shipping)
+--81 Какой способ доставки самый популярный?
+SELECT ship_mode, COUNT (*) from store GROUP BY ship_mode ORDER BY count DESC LIMIT 1;
+--82 Как способ доставки влияет на среднюю прибыль?
+SELECT ship_mode, AVG(profit) FROM store GROUP BY ship_mode ORDER BY avg DESC;
+--83 Какой способ доставки чаще всего используется для "High" приоритетных заказов?
+SELECT ship_mode, COUNT (*) FROM store WHERE order_priority = 'High' GROUP BY  ship_mode ORDER BY count DESC limit 1;
+--84 Есть ли заказы, где выбран "Same Day", и какова их средняя стоимость?
+SELECT AVG(sales/quantity) FROM store WHERE ship_mode = 'Same Day';
+--85 Какая страна чаще всего использует "First Class" доставку?
+SELECT country, COUNT (*) FROM store WHERE ship_mode = 'First Class' GROUP BY country ORDER BY count DESC;
+--86 В какой категории товаров чаще всего используют "Standard Class"?
+SELECT category, COUNT (*) FROM store WHERE ship_mode = 'Standard Class' GROUP BY category ORDER BY count DESC LIMIT 1;
+--87 Зависит ли выбор доставки от сезона (месяца)?
+SELECT * FROM (SELECT TO_CHAR(order_date, 'Month') as Month, ship_mode, COUNT (*) AS count, ROUND(COUNT(*) * 100.0 / SUM (COUNT(*)) OVER (PARTITION BY TO_CHAR(order_date, 'Month')), 1) AS prcnt, 
+RANK () OVER (PARTITION BY TO_CHAR(order_date, 'Month') ORDER BY COUNT (*) DESC) AS rank
+FROM store GROUP BY Month, ship_mode) WHERE rank = 1;
+--IX. Связи и Корреляции (Взаимосвязи)
+--88 Корреляция между Sales и Profit
+SELECT CORR(sales, profit) FROM store;
+--89 Корреляция между Discount и Sales
+SELECT CORR (discount, sales) FROM store;
+--90 Влияет ли количество товаров в заказе (Quantity) на прибыльность?
+SELECT CORR (quantity, profit) FROM store;
+--91 Зависит ли Shipping Cost от Region?
+SELECT region, AVG(shipping_cost) FROM store GROUP BY region ORDER BY avg DESC;
+--92 Есть ли связь между Order Priority и Ship Mode?
+SELECT ship_mode, order_priority, COUNT (*), COUNT (*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY ship_mode) FROM store GROUP BY ship_mode, order_priority;
+--93 Зависит ли Sales от Segment и Category вместе?
+SELECT segment, category, ROUND(AVG(sales), 2) FROM store GROUP BY segment, category ORDER BY round DESC;
+--94 Есть ли связь между страной и выбором категории товаров?
+SELECT country, category, COUNT (*) FROM store GROUP BY country, category ORDER BY country, count DESC;
+--95 Влияет ли Discount на Shipping Cost?
+SELECT CORR(discount, shipping_cost) FROM store;
+--96 Корреляция между Profit и Quantity в разрезе подкатегорий
+SELECT sub_category, CORR(profit, quantity) FROM store GROUP BY sub_category ORDER BY sub_category;
+--X. ТОП-N и Рейтинги
+--97 Топ-10 самых прибыльных подкатегорий
+SELECT sub_category, ROUND(SUM(profit)) FROM store GROUP BY sub_category order by round DESC LIMIT 10;
+--98 Топ-10 самых убыточных подкатегорий
+SELECT sub_category, ROUND(SUM(profit)) FROM store WHERE profit < 0 GROUP BY sub_category ORDER BY round LIMIT 10;
+--99 Топ-10 стран с самым высоким средним чеком
+SELECT country, ROUND(AVG(sales)) FROM store GROUP BY country ORDER BY round DESC LIMIT 10;
+--100 Топ-5 клиентов с наибольшим количеством заказов в каждой стране.
+SELECT * FROM (SELECT customer_name, country, COUNT(*), DENSE_RANK () OVER (PARTITION BY country ORDER BY COUNT(*) DESC) FROM store GROUP BY customer_name, country)
+WHERE dense_rank = 1;
+--101 Топ-3 товара по продажам в каждой категории
+SELECT * FROM (SELECT category, product_name, ROUND(SUM(sales)), DENSE_RANK () OVER (PARTITION BY category ORDER BY ROUND(SUM(sales)) DESC) FROM store GROUP BY category, product_name)
+WHERE dense_rank < 4;
+--102 Топ-10 заказов с самой высокой маржинальностью
+SELECT * FROM store;
+SELECT order_id, (profit/NULLIF(sales, 0) * 100) AS mrg FROM store ORDER BY mrg DESC LIMIT 10;
+--103 Топ-5 самых популярных товаров в "APAC" регионе
+SELECT product_name, COUNT (*) FROM store WHERE region = 'APAC' GROUP BY product_name ORDER BY count DESC LIMIT 5; --нет такого региона
+-- XI. Фильтрация и Условия
+--104 Все заказы с Profit > 1000
+SELECT * FROM store WHERE profit > 1000;
+--105 Все заказы с убытком (Profit < 0) и скидкой > 0.4
+SELECT * FROM store WHERE profit < 0 AND discount > 0.4;
+--106 Заказы за 2012 год, где Quantity > 5
+SELECT * FROM store WHERE year = 2012 AND quantity > 5;
+--107 Заказы клиентов из сегмента "Consumer", сделанные в 2011 году
+SELECT * FROM store WHERE segment = 'Consumer' AND year = 2011;
+--108 Товары категории "Technology", проданные в "United States"
+SELECT product_name FROM store WHERE category = 'Technology' AND country = 'United States';
+--109 Заказы с доставкой "Second Class", где Shipping Cost > 100.
+SELECT * FROM store WHERE ship_mode = 'Second Class' AND shipping_cost > 100;
+--110 Заказы с прибылью, но с отрицательной маржинальностью (редкий случай)
+SELECT * FROM store WHERE (profit > 0 ) AND (profit/NULLIF(sales, 0)) < 0;
+--111 Все уникальные товары, которые продавались в "Africa".
+SELECT DISTINCT (product_name) FROM store WHERE region = 'Africa';
+--112 Клиенты, которые делали заказы и в 2011, и в 2012 годах.
+SELECT DISTINCT (customer_name) FROM store WHERE year = '2011' OR year = '2012' GROUP BY customer_name HAVING COUNT(DISTINCT(year)) = 2;
+--XII. Агрегации и Группировки (без временных рядов)
+--113 Средняя Sales, Quantity, Profit по каждому Segment.
+SELECT segment, ROUND(AVG(sales), 3) AS avg_sales, ROUND(AVG(quantity), 3) AS avg_quantity, ROUND(AVG(profit), 3) AS avg_profit FROM store GROUP BY segment;
+--114 Суммарная Profit по каждой Category в разрезе Region.
+SELECT category, region, ROUND(SUM(profit)) FROM store GROUP BY category, region;
+--115 Количество заказов и средняя Discount по каждому Ship Mode
+SELECT ship_mode, COUNT(*), AVG(discount) FROM store GROUP BY ship_mode;
+--116 Общая Sales и Profit для каждой страны
+SELECT country, SUM(sales), SUM(profit) FROM store GROUP BY country ORDER BY country;
+--117 Максимальная, минимальная и средняя Shipping Cost по категориям.
+SELECT category, MAX(shipping_cost), MIN(shipping_cost) FROM store GROUP BY category;
+--118 Количество уникальных клиентов в каждой подкатегории товаров.
+SELECT sub_category, COUNT(DISTINCT(customer_name)) FROM store GROUP BY sub_category;
+--XIII. Сравнительный Анализ
+--119 Сравнить продажи "Office Supplies" в США и Канаде.
+SELECT country, ROUND(SUM(sales)) FROM store WHERE (country = 'United States' OR country = 'Canada') AND category = 'Office Supplies' GROUP BY country;
+SELECT * FROM store;
+--120 Сравнить эффективность (среднюю прибыль) "Corporate" и "Consumer" сегментов в Европе
+SELECT segment, AVG(profit) FROM store WHERE market = 'EU' AND (segment = 'Corporate' OR segment = 'Consumer') GROUP BY segment;
+--121 Сравнить среднюю скидку для товаров с высокой и низкой прибылью
+SELECT CASE WHEN profit < (SELECT AVG(profit) FROM store) THEN 'low'
+WHEN profit > (SELECT AVG(profit) FROM store) THEN 'high' END AS type, AVG(discount) FROM store GROUP BY type;
+--122 Сравнить общую прибыль от "Furniture" в 2011 и 2012 годах.
+SELECT year, SUM(profit) FROM store WHERE category = 'Furniture' AND (year=2011 OR year=2012) GROUP BY year;
+--123 Сравнить количество заказов в "Standard Class" и "Second Class" по месяцам
+SELECT TO_CHAR (order_date, 'Month') AS "Month", ship_mode, COUNT (*) FROM store WHERE ship_mode = 'Standard Class' OR ship_mode = 'Second Class' GROUP BY "Month", ship_mode ORDER BY "Month";
+--XIV. Аномалии и Выбросы
+--124 Заказы с аномально высокой стоимостью доставки (Shipping Cost > 1000)
+SELECT * FROM store WHERE shipping_cost > 1000;
+--125 Заказы с очень высокой скидкой (Discount > 0.9)
+SELECT * FROM store WHERE discount > 0.9;
+--126 Найти заказы с положительной Sales и отрицательной Profit при Discount = 0. (Проверить на ошибки в данных)
+SELECT * FROM store WHERE sales > 0 AND profit < 0 AND discount = 0;
+--127 Клиенты, которые сделали только один заказ, но с очень большой суммой
+SELECT customer_name FROM store GROUP BY customer_name HAVING (COUNT (*) = 1) AND (AVG(sales) > (SELECT AVG(sales) FROM store));
+--128 Найти подкатегории с сильно различающейся маржинальностью.
+WITH mrg AS (SELECT sub_category, (profit/NULLIF (sales, 0) * 100) AS margin FROM store WHERE sales > 1)
+SELECT sub_category, ROUND(AVG(margin)) AVG , ROUND(STDDEV(margin)) STDDEV, ROUND(MAX(margin)-MIN(margin)) AS размах FROM mrg GROUP BY sub_category;
+--129 Товары с необычно низкой ценой для своей категории.
+WITH virok_1 AS (SELECT category, product_name, (sales/quantity) AS price FROM store),
+virok_2 AS (SELECT *, AVG(price) OVER (PARTITION BY category) AS price2 FROM virok_1)
+SELECT product_name FROM virok_2 WHERE price < price2 /2;
+--XV. Комбинированные и Сложные Запросы
+--130 Клиенты, которые купили товары из всех трех категорий (Furniture, Office Supplies, Technology).
+SELECT customer_name FROM store GROUP BY customer_name HAVING COUNT(DISTINCT(category)) = 3;
+--131 Заказы, где сумма скидки превышает стоимость доставки (Discount > Shipping Cost)
+SELECT * FROM store WHERE (sales * discount > shipping_cost);
+--132 Для каждого клиента найти его самый прибыльный и самый убыточный заказ.
+SELECT customer_name, MAX(profit), MIN(profit) FROM store GROUP BY customer_name ORDER BY customer_name;
+--133 Найти товары, которые продаются лучше всего в тех странах, где они же приносят наибольшую прибыль
+WITH virok1 AS (SELECT product_name, country, SUM(profit) AS prof, SUM(sales) AS sal FROM store GROUP BY product_name, country), 
+virok2 AS (SELECT *, RANK() OVER(PARTITION BY product_name ORDER BY sal DESC) AS rnk_sales, RANK() OVER(PARTITION BY product_name ORDER BY prof DESC) AS rnk_profit FROM virok1)
+SELECT product_name, country FROM virok2 WHERE rnk_sales = 1 AND rnk_profit = 1;
+--134 Рассчитать долю каждой подкатегории в общей прибыли своей категории
+SELECT category, sub_category, SUM(profit) AS prf, ROUND(SUM(profit) * 100.00/SUM(SUM(profit)) OVER (PARTITION BY category), 2) AS prcnt FROM store GROUP BY category, sub_category;
+--135 Определить, какие товары чаще всего покупают вместе (например, в одном заказе) 
+SELECT a.product_name AS product1, b.product_name AS product2, COUNT(*) FROM store a JOIN store b ON a.order_id = b.order_id AND a.product_name < b.product_name 
+GROUP BY a.product_name, b.product_name ORDER BY count DESC LIMIT 30;
+--136 Найти клиентов, которые сменили сегмент (если такое возможно в данных)
+SELECT customer_name, COUNT(DISTINCT (segment)) FROM store GROUP BY customer_name HAVING COUNT(DISTINCT (segment)) > 1;
+-- 137 Рассчитать скользящую среднюю продаж за последние 3 месяца.
+WITH virok AS (SELECT DATE_TRUNC('month', order_date) AS month, SUM(sales) FROM store GROUP BY month)
+SELECT month, sum, ROUND(AVG(sum) OVER (ORDER BY month ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) as avg
+FROM virok ORDER BY month;
+-- 138 Предложить список товаров, на которые стоит повысить цену (высокий спрос, высокая маржа)
+WITH virok1 AS (SELECT product_name, category, SUM(profit) AS profits, SUM(sales) AS saless, SUM(quantity) AS quantitys FROM STORE group by product_name, category),
+virok2 AS (SELECT *, profits *100.0/ (NULLIF (saless, 0)) AS marga, AVG(quantitys) OVER (PARTITION BY category) AS quant_avg FROM virok1)
+SELECT product_name, quantitys, marga FROM virok2 WHERE quantitys > quant_avg AND marga > 20; 
+--139 Предложить список товаров, на которые стоит дать скидку (чтобы распродать)
+WITH virok1 AS (SELECT product_name, category, SUM(profit) AS profits, SUM(sales) AS saless, SUM(quantity) AS quantitys FROM STORE group by product_name, category),
+virok2 AS (SELECT *, profits *100.0/ (NULLIF (saless, 0)) AS marga, AVG(quantitys) OVER (PARTITION BY category) AS quant_avg FROM virok1)
+SELECT product_name, quantitys, marga FROM virok2 WHERE quantitys < quant_avg AND marga < 10; 
+-- 140 В каких странах стоит открыть новый склад (высокие продажи, высокие затраты на доставку)?
+SELECT * FROM store;
+WITH virok AS (SELECT country, SUM(sales) AS saless, SUM(shipping_cost) scs FROM store GROUP BY country),
+virok2 AS (SELECT *, AVG(saless) OVER () AS avg_sal, AVG(scs) OVER () AS avg_scs FROM virok)
+SELECT country FROM virok2 WHERE saless> avg_sal AND scs > avg_scs;
+--141 Какой сегмент клиентов наиболее лоялен и приносит больше всего прибыли?
+SELECT segment, COUNT(DISTINCT customer_name) AS distin, COUNT(*), COUNT(*) * 1.00 / COUNT(DISTINCT customer_name) AS count_for_1, SUM(profit) FROM store GROUP BY segment;
+--142 На сколько нужно увеличить продажи в самом убыточном регионе, чтобы выйти в ноль?
+SELECT region, SUM(profit) FROM store GROUP BY region; --нет убыточных
+--143 Какие категории товаров требуют большего маркетингового внимания (низкие продажи, но высокий потенциал)?
+WITH virok AS (SELECT category, SUM(sales), SUM(profit) * 100.0/ SUM(NULLIF(sales, 0)) AS marga FROM store GROUP BY category),
+virok2 AS (SELECT *, AVG(sum) OVER(), AVG (marga) OVER() as mar FROM virok)
+SELECT category FROM virok2 WHERE sum < avg AND marga > mar;
+--144 Оценить влияние скидок на общую прибыль компании
+SELECT CORR(discount, profit) FROM store;
+SELECT SUM(profit) AS sum_with_no_discount, COUNT(*) AS count_with_no_discount FROM store WHERE discount = 0
+UNION ALL
+SELECT SUM(profit) AS sum_with_discount, COUNT(*) AS count_with_discount FROM store WHERE discount > 0;
+SELECT CASE 
+	WHEN discount = 0 THEN 'Скидка нема'
+	WHEN discount <= 0.1 THEN 'Скидка 1-10%'
+    WHEN discount <= 0.2 THEN 'Скидка 11-20%'
+    WHEN discount <= 0.3 THEN 'Скидка 21-30%'
+    WHEN discount <= 0.4 THEN 'Скидка 31-40%'
+    WHEN discount <= 0.5 THEN 'Скидка 41-50%'
+    WHEN discount <= 0.6 THEN 'Скидка 51-60%'
+    WHEN discount <= 0.7 THEN 'Скидка 61-70%'
+    WHEN discount <= 0.8 THEN 'Скидка 71-80%'
+    WHEN discount <= 0.9 THEN 'Скидка 81-90%'
+    WHEN discount <= 1 THEN 'Скидка 91-100%'
+    ELSE 'Другое' END AS "Classification",
+    SUM(profit) AS sum_of_pr, AVG(profit) AS avg_of_pr, COUNT(*) FROM store GROUP BY "Classification" ORDER BY "Classification";
+--145 Спрогнозировать продажи на следующий месяц на основе исторических данных.
+WITH virok AS (SELECT date_trunc('month', order_date) AS month_start, SUM(sales) AS sales FROM store GROUP BY date_trunc('month', order_date)),
+virok1 AS (SELECT month_start, AVG(sales) OVER (ORDER BY month_start ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS rolling_3m FROM virok)
+SELECT (MAX(month_start) + INTERVAL '1 month') AS forecast_month, MAX(rolling_3m) AS forecast_sales FROM virok1;
+--XVII. Data Quality (Качество Данных)
+--146 Есть ли дубликаты заказов (order_id)?
+SELECT COUNT(order_id) AS all, COUNT(DISTINCT (order_id)) as uniq FROM store;
+--147 Есть ли пропущенные значения в ключевых полях (например, sales, profit)?
+SELECT (COUNT(*) - COUNT(sales)) AS cnt_null_sls, (COUNT(*) - COUNT(profit)) AS cnt_null_prft FROM store;
+--148 Корректны ли даты (order_date > ship_date)? (Проверка)
+SELECT COUNT(*) FROM store WHERE order_date > ship_date;
+--149 Есть ли отрицательные значения Sales или Quantity?
+SELECT COUNT(*) FROM store WHERE sales < 0 or quantity < 0;
+--150 Есть ли заказы с Profit = 0, но Sales > 0?
+SELECT COUNT(*) FROM store WHERE profit = 0 and sales > 0;
+--XVIII. Анализ по State (Штаты/Провинции)
+SELECT * FROM store;
+--151 Какие 5 штатов в США приносят больше всего прибыли?
+SELECT state, SUM(profit) as sum_of_pr FROM store GROUP BY state ORDER BY sum_of_pr DESC LIMIT 5;
+--152 В каком штате США самая высокая средняя стоимость доставки?
+SELECT state, AVG(shipping_cost) FROM store GROUP BY state ORDER BY avg DESC LIMIT 1;
+--153 Есть ли штаты, где продажи "Technology" превышают продажи "Office Supplies"?
+SELECT state, SUM(sales) AS sum_s FROM store WHERE category = 'Technology' OR category = 'Office Supplies' GROUP BY state
+HAVING SUM(CASE WHEN category = 'Technology' THEN sales ELSE 0 END) > SUM(CASE WHEN category = 'Office Supplies' THEN sales ELSE 0 END)
+ORDER BY state;
+--154 Какой штат США имеет самый высокий процент убыточных заказов?
+SELECT state, COUNT(*) total, SUM(CASE WHEN profit < 0 THEN 1 ELSE 0 END) los, SUM(CASE WHEN profit < 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS los_prcnt FROM store
+GROUP BY state ORDER BY los_prcnt DESC LIMIT 169;
+--155 В каком штате покупают больше всего мебели?
+SELECT state, SUM(sales) AS sum_sal FROM store WHERE category = 'Furniture' GROUP BY state ORDER BY sum_sal DESC;
+-- XIX. Продуктовые "Корзины"
+--156 Какие товары часто покупаются вместе с "Xerox195"?
+WITH virok1 AS (SELECT DISTINCT order_id FROM store WHERE product_name = 'Xerox 195')
+SELECT s.product_name, COUNT (s.order_id) FROM store s JOIN virok1 v ON s.order_id=v.order_id GROUP BY s.product_name;
+--157 Какие подкатегории чаще всего встречаются в одном заказе?
+SELECT a.sub_category AS sub1, b.sub_category AS sub2, COUNT(DISTINCT a.order_id) AS times_together
+FROM (SELECT DISTINCT order_id, sub_category FROM store) a JOIN (SELECT DISTINCT order_id, sub_category FROM store) b
+ ON a.order_id = b.order_id AND a.sub_category < b.sub_category GROUP BY a.sub_category, b.sub_category ORDER BY times_together DESC;
+--158 Создать список топ-10 пар товаров, которые покупают вместе.
+SELECT a.product_name AS pr1, b.product_name AS pr2, COUNT(DISTINCT a.order_id) AS times_together
+FROM (SELECT DISTINCT order_id, product_name FROM store) a JOIN (SELECT DISTINCT order_id, product_name FROM store) b
+ ON a.order_id = b.order_id AND a.product_name < b.product_name GROUP BY a.product_name, b.product_name ORDER BY times_together DESC;
+--159 Рассчитать среднее время доставки (ship_date - order_date) для каждого способа доставки
+SELECT ship_mode, AVG(ship_date-order_date ) FROM store GROUP BY ship_mode ORDER BY avg DESC;
+--160 Зависит ли время доставки от географического региона?
+SELECT region, AVG(ship_date-order_date ) FROM store GROUP BY region ORDER BY avg DESC;
+--161 Есть ли корреляция между временем доставки и прибылью заказа?
+SELECT CORR ((ship_date-order_date), profit) FROM store;
+--162 В каких странах самое долгое время доставки?
+SELECT country, AVG(ship_date-order_date) FROM store GROUP BY country ORDER BY avg DESC;
+--163 Как приоритет заказа влияет на время доставки?
+SELECT * FROM store;
+SELECT order_priority, AVG(ship_date-order_date) FROM store GROUP BY order_priority ORDER BY avg DESC;
+--164 Рассчитать Profit per Unit (Прибыль на единицу товара: Profit / Quantity) для каждого товара.
+WITH virok AS (SELECT product_name, SUM(profit) AS sp, SUM(quantity) AS sqv FROM store GROUP BY product_name)
+SELECT product_name, sp/sqv FROM virok;
+--165 Топ-10 товаров с самым высоким Profit per Unit.
+SELECT product_name, SUM(profit) / SUM(quantity) AS ppu FROM store GROUP BY product_name ORDER BY ppu DESC limit 10;
+--166 Топ-10 товаров с самым низким Profit per Unit.
+SELECT product_name, SUM(profit) / SUM(quantity) AS ppu FROM store GROUP BY product_name ORDER BY ppu limit 10;
+--XXII. Анализ Возвратов (Приблизительный, через отрицательную прибыль)
+--167 Какая подкатегория товаров имеет самый высокий "процент возвратов" (отрицательная прибыль в заказах)?
+SELECT sub_category, SUM (CASE WHEN profit < 0 THEN 1 ELSE 0 END) / COUNT(*) as "prcnt_return" FROM store GROUP BY sub_category ORDER BY "prcnt_return" DESC;
+--168 В каком месяце было больше всего "возвратов" (отрицательных заказов)?
+SELECT TO_CHAR(order_date, 'Month') AS Month, COUNT(*) FROM store WHERE profit < 0 GROUP BY Month ORDER BY count DESC;
